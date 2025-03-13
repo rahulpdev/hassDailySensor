@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Day of Month Sensor Configuration",
+        "description": "Set up a sensor that calculates values based on historical data",
+        "data": {
+          "entity_id": "Source Entity",
+          "track_value": "Track Value",
+          "aggregation": "Aggregation Method",
+          "historic_range": "Historic Range",
+          "update_frequency": "Update Frequency"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity": "Entity must be a numeric sensor with a valid state class",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This entity is already configured"
+    }
+  }
+}

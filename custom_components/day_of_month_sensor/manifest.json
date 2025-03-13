@@ -1,0 +1,11 @@
+{
+  "domain": "day_of_month_sensor",
+  "name": "Day of Month Sensor",
+  "documentation": "https://github.com/rahulpdev/hassDailySensor",
+  "dependencies": ["recorder"],
+  "codeowners": ["@rahulpdev"],
+  "requirements": [],
+  "iot_class": "local_polling",
+  "version": "0.1.1",
+  "config_flow": true
+}

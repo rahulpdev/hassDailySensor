@@ -104,6 +104,23 @@ This will show you the highest energy usage recorded on this day of the month ac
 - If the sensor shows "unknown" or "unavailable", check that there is sufficient historical data available for the calculation.
 - The sensor automatically inherits the unit of measurement from the source entity.
 
+## Development
+
+### Release Process (Note to self)
+
+This integration uses GitHub Actions to automate the release process. When a new version is ready to be released:
+
+1. Update the version number in `custom_components/day_of_month_sensor/manifest.json`
+2. Update `CHANGELOG.md` with a new section for the version (e.g., `## 0.1.2`)
+3. Commit these changes: `git commit -m "Bump version to 0.1.2"`
+4. Create and push a tag matching the version:
+   ```
+   git tag v0.1.2
+   git push origin v0.1.2
+   ```
+
+The GitHub release will be used by HACS to make the new version available to users.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

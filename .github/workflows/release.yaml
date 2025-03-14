@@ -1,0 +1,65 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - "v*" # This will trigger on any tag that starts with 'v'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Version consistency check
+      - name: Check version consistency
+        run: |
+          VERSION_TAG=${GITHUB_REF#refs/tags/v}
+          MANIFEST_VERSION=$(grep -o '"version": "[^"]*"' custom_components/day_of_month_sensor/manifest.json | cut -d'"' -f4)
+          if [ "$VERSION_TAG" != "$MANIFEST_VERSION" ]; then
+            echo "Version mismatch: Tag is $VERSION_TAG but manifest.json has $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "Version consistency check passed: $VERSION_TAG"
+
+      # HASS validation (hassfest validates your integration)
+      - name: HASS validation
+        uses: home-assistant/actions/hassfest@master
+
+      # HACS validation
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
+
+      # Extract release notes from CHANGELOG.md
+      - name: Get release notes
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          # Extract content between current version header and next version header
+          NOTES=$(awk "/## $VERSION/,/## [0-9]+\.[0-9]+\.[0-9]+/" CHANGELOG.md | sed '1d;$d')
+          # If there's no next version header, extract until the end of file
+          if [ -z "$NOTES" ]; then
+            NOTES=$(awk "/## $VERSION/,/^$/" CHANGELOG.md | sed '1d')
+          fi
+          echo "NOTES<<EOF" >> $GITHUB_ENV
+          echo "$NOTES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # Create GitHub release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: ${{ env.NOTES }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}

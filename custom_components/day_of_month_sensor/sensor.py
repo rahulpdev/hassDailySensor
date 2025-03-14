@@ -246,7 +246,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                     get_last_statistics,
                     self.hass,
                     1,  # Get the most recent statistic
-                    self._entity_id,
+                    [self._entity_id],
                     True,  # Include the current day
                 )
             else:

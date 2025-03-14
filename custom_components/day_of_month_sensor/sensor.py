@@ -178,29 +178,19 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         # Set up update interval based on configuration
         if self._update_frequency == UPDATE_FREQUENCY_HOURLY:
             # Update every hour at the beginning of the hour
-            now: datetime = dt_util.now()
-            next_hour: datetime = now.replace(
-                minute=0, second=0, microsecond=0
-            ) + timedelta(hours=1)
             self._remove_update_listener = async_track_time_interval(
                 self.hass,
                 self._async_update,
                 timedelta(hours=1),
                 cancel_on_shutdown=True,
-                start_time=next_hour,
             )
         else:  # UPDATE_FREQUENCY_DAILY
             # Update once a day at midnight
-            now: datetime = dt_util.now()
-            midnight: datetime = now.replace(
-                hour=0, minute=0, second=0, microsecond=0
-            ) + timedelta(days=1)
             self._remove_update_listener = async_track_time_interval(
                 self.hass,
                 self._async_update,
                 timedelta(days=1),
                 cancel_on_shutdown=True,
-                start_time=midnight,
             )
         
         # Do an initial update

@@ -90,7 +90,7 @@ async def async_setup_entry(
     )
 
 
-class DayOfMonthSensor(RestoreEntity, SensorEntity):
+class DayOfMonthSensor(SensorEntity, RestoreEntity):
     """Representation of a Day of Month Sensor."""
 
     _attr_should_poll: bool = False

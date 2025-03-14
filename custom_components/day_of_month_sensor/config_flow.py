@@ -129,12 +129,8 @@ class DayOfMonthSensorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_ENTITY_ID): selector.EntitySelector(
                     selector.EntitySelectorConfig(
-                        domain=SENSOR_DOMAIN,
+                        filter={"domain": SENSOR_DOMAIN},
                         multiple=False,
-                        description={
-                            "hint": "Select a numeric sensor with state class: "
-                            "measurement, total, total_increasing, calculation"
-                        },
                     ),
                 ),
                 vol.Required(CONF_TRACK_VALUE): selector.SelectSelector(

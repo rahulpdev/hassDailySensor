@@ -94,7 +94,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
     """Representation of a Day of Month Sensor."""
 
     _attr_should_poll: bool = False
-    _attr_state_class: SensorStateClass = SensorStateClass.CALCULATION
+    _attr_state_class: SensorStateClass = SensorStateClass.MEASUREMENT
 
     def __init__(
         self,

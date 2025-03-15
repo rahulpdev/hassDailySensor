@@ -232,21 +232,30 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         try:
             if self._update_frequency == UPDATE_FREQUENCY_DAILY:
                 # For daily updates, we only want the last value for each day
+                _LOGGER.warning("Fetching daily statistics for entity: %s", self._entity_id)
                 stats: list[dict[str, Any]] = await self.hass.async_add_executor_job(
                     get_last_statistics,
                     self.hass,
                     1,  # Get the most recent statistic
-                    [self._entity_id],
+                    self._entity_id,
                     True,  # Include the current day
                 )
+                _LOGGER.warning("Retrieved %d daily statistics records", len(stats))
             else:
                 # For hourly updates, get all statistics
+                _LOGGER.warning(
+                    "Fetching hourly statistics for entity: %s (last 365 days)",
+                    self._entity_id
+                )
+                start_time = dt_util.as_utc(
+                    dt_util.start_of_local_day(now - timedelta(days=365))
+                )
+                _LOGGER.warning("Start time for statistics: %s", start_time)
+                
                 stats_result: dict[str, list[dict[str, Any]]] = await self.hass.async_add_executor_job(
                     statistics_during_period,
                     self.hass,
-                    dt_util.as_utc(
-                        dt_util.start_of_local_day(now - timedelta(days=365))
-                    ),
+                    start_time,
                     None,  # No end time (up to now)
                     [self._entity_id],
                     "hour",  # Hourly statistics
@@ -254,6 +263,16 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                     {"sum", "mean", "min", "max", "state"},  # All statistic types
                 )
                 stats = stats_result.get(self._entity_id, [])
+                _LOGGER.warning("Retrieved %d hourly statistics records", len(stats))
+                
+                # Log a sample of the statistics data
+                if stats:
+                    sample = stats[0]
+                    _LOGGER.warning(
+                        "Sample statistic record: start=%s, fields=%s",
+                        sample.get("start"),
+                        {k: v for k, v in sample.items() if k != "start"}
+                    )
         except Exception as ex:
             _LOGGER.error("Error getting statistics: %s", ex)
             self._attr_native_value = None
@@ -262,6 +281,13 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         
         # Filter statistics based on historic range
         filtered_stats: list[dict[str, Any]] = []
+        _LOGGER.warning(
+            "Filtering statistics for historic range: %s (current day: %d, month: %d)",
+            self._historic_range,
+            now.day,
+            now.month
+        )
+        
         for stat in stats:
             stat_datetime: datetime = dt_util.as_local(stat["start"])
             
@@ -274,8 +300,24 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                 if stat_datetime.day == now.day:
                     filtered_stats.append(stat)
         
+        _LOGGER.warning(
+            "After filtering, found %d matching records for day %d",
+            len(filtered_stats),
+            now.day
+        )
+        
+        # Log some sample dates from filtered stats
+        if filtered_stats:
+            sample_dates = [
+                dt_util.as_local(stat["start"]).strftime("%Y-%m-%d %H:%M")
+                for stat in filtered_stats[:3]
+            ]
+            _LOGGER.warning("Sample dates from filtered stats: %s", sample_dates)
+        
         # Extract the values to track
         values: list[float] = []
+        _LOGGER.warning("Extracting '%s' values from filtered statistics", self._track_value)
+        
         for stat in filtered_stats:
             if self._track_value == TRACK_VALUE_MEAN and "mean" in stat:
                 values.append(stat["mean"])
@@ -286,32 +328,74 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
             elif self._track_value == TRACK_VALUE_STATE and "state" in stat:
                 values.append(stat["state"])
         
+        _LOGGER.warning("Extracted %d values for '%s'", len(values), self._track_value)
+        
+        # Log the extracted values
+        if values:
+            _LOGGER.warning(
+                "Sample values (up to 5): %s", 
+                [round(v, 2) if isinstance(v, float) else v for v in values[:5]]
+            )
+        
         # Calculate the aggregation
+        _LOGGER.warning("Calculating '%s' aggregation on %d values", self._aggregation, len(values))
+        
         if not values:
             _LOGGER.warning("No historical data found for %s", self._entity_id)
             self._attr_native_value = None
         elif self._aggregation == AGGREGATION_MAXIMUM:
-            self._attr_native_value = max(values)
+            try:
+                self._attr_native_value = max(values)
+                _LOGGER.warning("Maximum value calculated: %s", self._attr_native_value)
+            except Exception as ex:
+                _LOGGER.error("Error calculating maximum: %s", ex)
+                self._attr_native_value = None
         elif self._aggregation == AGGREGATION_MINIMUM:
-            self._attr_native_value = min(values)
+            try:
+                self._attr_native_value = min(values)
+                _LOGGER.warning("Minimum value calculated: %s", self._attr_native_value)
+            except Exception as ex:
+                _LOGGER.error("Error calculating minimum: %s", ex)
+                self._attr_native_value = None
         elif self._aggregation == AGGREGATION_MEDIAN:
-            # Handle the even number of data points case for median
-            if len(values) % 2 == 0 and values:
-                sorted_values: list[float] = sorted(values)
-                middle1: float = sorted_values[len(values) // 2 - 1]
-                middle2: float = sorted_values[len(values) // 2]
-                self._attr_native_value = (middle1 + middle2) / 2
-            else:
-                self._attr_native_value = statistics.median(values)
+            try:
+                # Handle the even number of data points case for median
+                if len(values) % 2 == 0 and values:
+                    sorted_values: list[float] = sorted(values)
+                    middle1: float = sorted_values[len(values) // 2 - 1]
+                    middle2: float = sorted_values[len(values) // 2]
+                    self._attr_native_value = (middle1 + middle2) / 2
+                    _LOGGER.warning(
+                        "Median calculated from even number of values (%d): %s (middle values: %s, %s)",
+                        len(values), self._attr_native_value, middle1, middle2
+                    )
+                else:
+                    self._attr_native_value = statistics.median(values)
+                    _LOGGER.warning("Median calculated: %s", self._attr_native_value)
+            except Exception as ex:
+                _LOGGER.error("Error calculating median: %s", ex)
+                self._attr_native_value = None
         elif self._aggregation == AGGREGATION_MEAN:
-            self._attr_native_value = statistics.mean(values)
+            try:
+                self._attr_native_value = statistics.mean(values)
+                _LOGGER.warning("Mean value calculated: %s", self._attr_native_value)
+            except Exception as ex:
+                _LOGGER.error("Error calculating mean: %s", ex)
+                self._attr_native_value = None
         elif self._aggregation == AGGREGATION_STD_DEV:
-            # Handle edge cases for standard deviation
-            if len(values) == 1:
-                self._attr_native_value = "unknown"
-            elif len(values) == 2:
-                self._attr_native_value = 0
-            else:
-                self._attr_native_value = statistics.stdev(values)
+            try:
+                # Handle edge cases for standard deviation
+                if len(values) == 1:
+                    self._attr_native_value = "unknown"
+                    _LOGGER.warning("Standard deviation with one value: setting to 'unknown'")
+                elif len(values) == 2:
+                    self._attr_native_value = 0
+                    _LOGGER.warning("Standard deviation with two values: setting to 0")
+                else:
+                    self._attr_native_value = statistics.stdev(values)
+                    _LOGGER.warning("Standard deviation calculated: %s", self._attr_native_value)
+            except Exception as ex:
+                _LOGGER.error("Error calculating standard deviation: %s", ex)
+                self._attr_native_value = None
         
         self.async_write_ha_state()

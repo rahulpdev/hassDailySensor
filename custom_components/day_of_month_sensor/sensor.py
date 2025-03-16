@@ -401,8 +401,8 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
             try:
                 # Handle edge cases for standard deviation
                 if len(values) == 1:
-                    self._attr_native_value = "unknown"
-                    _LOGGER.warning("Standard deviation with one value: setting to 'unknown'")
+                    self._attr_native_value = None
+                    _LOGGER.warning("Standard deviation with one value: setting to None (unavailable)")
                 elif len(values) == 2:
                     self._attr_native_value = 0
                     _LOGGER.warning("Standard deviation with two values: setting to 0")

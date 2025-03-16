@@ -289,16 +289,31 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         )
         
         for stat in stats:
-            stat_datetime: datetime = dt_util.as_local(stat["start"])
-            
-            if self._historic_range == HISTORIC_RANGE_ANNUAL:
-                # Match day and month
-                if stat_datetime.day == now.day and stat_datetime.month == now.month:
-                    filtered_stats.append(stat)
-            else:  # HISTORIC_RANGE_MONTHLY
-                # Match day only
-                if stat_datetime.day == now.day:
-                    filtered_stats.append(stat)
+            try:
+                # Convert timestamp to datetime if needed
+                start_time = stat["start"]
+                if isinstance(start_time, (int, float)):
+                    # It's a timestamp, convert to datetime using dt_util
+                    start_time = dt_util.utc_from_timestamp(start_time)
+                
+                stat_datetime: datetime = dt_util.as_local(start_time)
+                
+                _LOGGER.warning(
+                    "Processing stat record: start=%s, converted to datetime=%s",
+                    stat["start"],
+                    stat_datetime
+                )
+                
+                if self._historic_range == HISTORIC_RANGE_ANNUAL:
+                    # Match day and month
+                    if stat_datetime.day == now.day and stat_datetime.month == now.month:
+                        filtered_stats.append(stat)
+                else:  # HISTORIC_RANGE_MONTHLY
+                    # Match day only
+                    if stat_datetime.day == now.day:
+                        filtered_stats.append(stat)
+            except Exception as ex:
+                _LOGGER.error("Error processing stat record: %s - %s", stat, ex)
         
         _LOGGER.warning(
             "After filtering, found %d matching records for day %d",

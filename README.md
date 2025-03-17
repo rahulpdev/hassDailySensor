@@ -7,7 +7,7 @@
 
 ![Project Maintenance][maintenance-shield]
 
-**Current Version:** 0.1.2  
+**Current Version:** 0.1.3  
 **Requires:** Home Assistant 2024.12.0+ | HACS 2.0.0+
 
 This custom integration for Home Assistant creates a sensor that calculates values based on historical data from existing sensors. It allows you to track patterns and trends over time by analyzing long-term statistics.

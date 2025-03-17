@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3 (2025-03-17)
+
+### Changes
+
+- Optimized database queries by targeting specific dates instead of fetching a full year of data
+- Reduced processing overhead by eliminating post-query filtering
+- Changed log level from warning to debug for normal operation logs
+- Added new method to generate target dates based on historic range
+
 ## 0.1.2 (2025-03-17)
 
 ### Changes

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 (2025-03-17)
+
+### Changes
+
+- Fixed error with missing 'types' parameter in get_last_statistics function
+- Standardized statistic types to include only "mean", "min", "max", and "state"
+- Removed "sum" from statistic types as it's not used by the integration
+
 ## 0.1.3 (2025-03-17)
 
 ### Changes

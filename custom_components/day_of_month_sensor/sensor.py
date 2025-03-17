@@ -333,6 +333,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                     1,  # Get the most recent statistic
                     self._entity_id,
                     True,  # Include the current day
+                    {"mean", "min", "max", "state"},  # Statistic types to retrieve
                 )
                 _LOGGER.debug("Retrieved %d daily statistics records", len(stats))
             else:
@@ -363,7 +364,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                         [self._entity_id],
                         "hour",  # Hourly statistics
                         None,  # No units conversion
-                        {"sum", "mean", "min", "max", "state"},  # All statistic types
+                        {"mean", "min", "max", "state"},  # Statistic types to retrieve
                     )
                     
                     date_stats = stats_result.get(self._entity_id, [])

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 (2025-03-17)
+
+### Changes
+
+- Fixed database access warning by using the recorder's executor for database operations
+- Improved performance of database operations
+
 ## 0.1.1 (2025-03-13)
 
 ### Changes

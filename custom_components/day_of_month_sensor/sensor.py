@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import statistics
 from typing import Any, Callable, Optional
 
+from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import (
     get_last_statistics,
     statistics_during_period,
@@ -274,7 +275,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
             if self._update_frequency == UPDATE_FREQUENCY_DAILY:
                 # For daily updates, we only want the last value for each day
                 _LOGGER.warning("Fetching daily statistics for entity: %s", self._entity_id)
-                stats: list[dict[str, Any]] = await self.hass.async_add_executor_job(
+                stats: list[dict[str, Any]] = await get_instance(self.hass).async_add_executor_job(
                     get_last_statistics,
                     self.hass,
                     1,  # Get the most recent statistic
@@ -293,7 +294,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                 )
                 _LOGGER.warning("Start time for statistics: %s", start_time)
                 
-                stats_result: dict[str, list[dict[str, Any]]] = await self.hass.async_add_executor_job(
+                stats_result: dict[str, list[dict[str, Any]]] = await get_instance(self.hass).async_add_executor_job(
                     statistics_during_period,
                     self.hass,
                     start_time,

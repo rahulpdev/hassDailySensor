@@ -61,7 +61,6 @@ VALID_STATE_CLASSES: Final = [
     "measurement",
     "total",
     "total_increasing",
-    "calculation",
 ]
 
 # Attributes

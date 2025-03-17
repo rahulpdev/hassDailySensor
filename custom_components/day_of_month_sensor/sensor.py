@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 import statistics
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from homeassistant.components.recorder.statistics import (
     get_last_statistics,
@@ -16,7 +16,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT
-from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -47,6 +47,39 @@ from .const import (
 )
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+def safe_convert_to_datetime(timestamp_value: Any) -> Optional[datetime]:
+    """Safely convert a timestamp value to a datetime object.
+    
+    Args:
+        timestamp_value: The timestamp value to convert, can be a float, int, 
+                        string, or datetime object.
+                        
+    Returns:
+        Optional[datetime]: A datetime object if conversion was successful, 
+                           None otherwise.
+    """
+    try:
+        if isinstance(timestamp_value, (int, float)):
+            # Convert numeric timestamp to datetime
+            return dt_util.utc_from_timestamp(timestamp_value)
+        elif isinstance(timestamp_value, datetime):
+            # Already a datetime, just return it
+            return timestamp_value
+        elif isinstance(timestamp_value, str):
+            # Try to parse string as datetime
+            try:
+                return dt_util.parse_datetime(timestamp_value)
+            except (ValueError, TypeError):
+                # If parsing fails, try to convert to float first
+                return dt_util.utc_from_timestamp(float(timestamp_value))
+        else:
+            _LOGGER.error("Unsupported timestamp type: %s", type(timestamp_value))
+            return None
+    except Exception as ex:
+        _LOGGER.error("Error converting timestamp %s: %s", timestamp_value, ex)
+        return None
 
 
 async def async_setup_entry(
@@ -139,9 +172,9 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         }
         
         # Will be set in async_added_to_hass
-        self._remove_update_listener: Callable[[], None] | None = None
-        self._attr_native_value: float | str | None = None
-        self._attr_native_unit_of_measurement: str | None = None
+        self._remove_update_listener: Optional[Callable[[], None]] = None
+        self._attr_native_value: Optional[float] = None
+        self._attr_native_unit_of_measurement: Optional[str] = None
 
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added.
@@ -160,7 +193,15 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         
         # Restore previous state if available
         if (state := await self.async_get_last_state()) is not None:
-            self._attr_native_value = state.state
+            try:
+                # Try to convert state to float for measurement state class
+                self._attr_native_value = float(state.state)
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Could not convert previous state '%s' to float, using None",
+                    state.state
+                )
+                self._attr_native_value = None
             
             # Restore attributes
             if ATTR_UNIT_OF_MEASUREMENT in state.attributes:
@@ -169,7 +210,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                 ]
         
         # Get the unit of measurement from the source entity
-        source_state: State | None = self.hass.states.get(self._entity_id)
+        source_state: Optional[State] = self.hass.states.get(self._entity_id)
         if source_state and ATTR_UNIT_OF_MEASUREMENT in source_state.attributes:
             self._attr_native_unit_of_measurement = source_state.attributes[
                 ATTR_UNIT_OF_MEASUREMENT
@@ -211,7 +252,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         if self._remove_update_listener:
             self._remove_update_listener()
 
-    async def _async_update(self, _now: datetime | None = None) -> None:
+    async def _async_update(self, _now: Optional[datetime] = None) -> None:
         """Update the sensor state.
         
         This method fetches statistics for the source entity, filters them based
@@ -290,13 +331,14 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         
         for stat in stats:
             try:
-                # Convert timestamp to datetime if needed
-                start_time = stat["start"]
-                if isinstance(start_time, (int, float)):
-                    # It's a timestamp, convert to datetime using dt_util
-                    start_time = dt_util.utc_from_timestamp(start_time)
+                # Safely convert timestamp to datetime
+                start_time_dt = safe_convert_to_datetime(stat["start"])
+                if not start_time_dt:
+                    _LOGGER.warning("Could not convert timestamp: %s", stat["start"])
+                    continue
                 
-                stat_datetime: datetime = dt_util.as_local(start_time)
+                # Convert to local time for comparison
+                stat_datetime = dt_util.as_local(start_time_dt)
                 
                 _LOGGER.warning(
                     "Processing stat record: start=%s, converted to datetime=%s",
@@ -304,6 +346,7 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
                     stat_datetime
                 )
                 
+                # Filter based on historic range
                 if self._historic_range == HISTORIC_RANGE_ANNUAL:
                     # Match day and month
                     if stat_datetime.day == now.day and stat_datetime.month == now.month:
@@ -323,34 +366,44 @@ class DayOfMonthSensor(SensorEntity, RestoreEntity):
         
         # Log some sample dates from filtered stats
         if filtered_stats:
-            sample_dates = [
-                dt_util.as_local(stat["start"]).strftime("%Y-%m-%d %H:%M")
-                for stat in filtered_stats[:3]
-            ]
-            _LOGGER.warning("Sample dates from filtered stats: %s", sample_dates)
+            try:
+                sample_dates = []
+                for stat in filtered_stats[:3]:
+                    start_time_dt = safe_convert_to_datetime(stat["start"])
+                    if start_time_dt:
+                        local_dt = dt_util.as_local(start_time_dt)
+                        sample_dates.append(local_dt.strftime("%Y-%m-%d %H:%M"))
+                
+                _LOGGER.warning("Sample dates from filtered stats: %s", sample_dates)
+            except Exception as ex:
+                _LOGGER.error("Error creating sample dates: %s", ex)
         
         # Extract the values to track
         values: list[float] = []
         _LOGGER.warning("Extracting '%s' values from filtered statistics", self._track_value)
         
         for stat in filtered_stats:
-            if self._track_value == TRACK_VALUE_MEAN and "mean" in stat:
-                values.append(stat["mean"])
-            elif self._track_value == TRACK_VALUE_MIN and "min" in stat:
-                values.append(stat["min"])
-            elif self._track_value == TRACK_VALUE_MAX and "max" in stat:
-                values.append(stat["max"])
-            elif self._track_value == TRACK_VALUE_STATE and "state" in stat:
-                values.append(stat["state"])
+            try:
+                if self._track_value == TRACK_VALUE_MEAN and "mean" in stat:
+                    values.append(float(stat["mean"]))
+                elif self._track_value == TRACK_VALUE_MIN and "min" in stat:
+                    values.append(float(stat["min"]))
+                elif self._track_value == TRACK_VALUE_MAX and "max" in stat:
+                    values.append(float(stat["max"]))
+                elif self._track_value == TRACK_VALUE_STATE and "state" in stat:
+                    values.append(float(stat["state"]))
+            except (ValueError, TypeError) as ex:
+                _LOGGER.error("Error extracting value from stat: %s - %s", stat, ex)
         
         _LOGGER.warning("Extracted %d values for '%s'", len(values), self._track_value)
         
         # Log the extracted values
         if values:
-            _LOGGER.warning(
-                "Sample values (up to 5): %s", 
-                [round(v, 2) if isinstance(v, float) else v for v in values[:5]]
-            )
+            try:
+                sample_values = [round(v, 2) for v in values[:5]]
+                _LOGGER.warning("Sample values (up to 5): %s", sample_values)
+            except Exception as ex:
+                _LOGGER.error("Error formatting sample values: %s", ex)
         
         # Calculate the aggregation
         _LOGGER.warning("Calculating '%s' aggregation on %d values", self._aggregation, len(values))
